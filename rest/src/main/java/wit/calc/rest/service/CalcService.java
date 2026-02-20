@@ -4,6 +4,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.kafka.requestreply.ReplyingKafkaTemplate;
@@ -15,6 +16,7 @@ import wit.calc.common.dto.CalcResponse;
 
 import java.math.BigDecimal;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class CalcService {
@@ -39,20 +41,25 @@ public class CalcService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Division by zero is not allowed.");
         }
 
-        LOGGER.info("::::> Sending calculation request: {} {} {}", request.getA(), request.getOperation(), request.getB());
+        MDC.put("uid", request.getUid());
+        try{
+            LOGGER.info("::::> Sending calculation request: {} {} {}", request.getA(), request.getOperation(), request.getB());
 
-        //Send to Kafka
-        ProducerRecord<String, CalcRequest> record = new ProducerRecord<>(requestsTopicName, request);
-        LOGGER.info("::::> Request sent to Kafka topic: {}", requestsTopicName);
+            //Send to Kafka
+            ProducerRecord<String, CalcRequest> record = new ProducerRecord<>(requestsTopicName, request);
+            LOGGER.info("::::> Request sent to Kafka topic: {}", requestsTopicName);
 
-        //Send and get promise for response
-        RequestReplyFuture<String, CalcRequest, CalcResponse> future = replyingKafkaTemplate.sendAndReceive(record);
-        LOGGER.info("::::> Awaiting response from Kafka topic: {}", responsesTopicName);
+            //Send and get promise for response
+            RequestReplyFuture<String, CalcRequest, CalcResponse> future = replyingKafkaTemplate.sendAndReceive(record);
+            LOGGER.info("::::> Awaiting response from Kafka topic: {}", responsesTopicName);
 
-        //Await calculator module response
-        ConsumerRecord<String, CalcResponse> consumerRecord = future.get();
-        LOGGER.info("::::> Received response from Kafka topic: {} with result: {}", responsesTopicName, consumerRecord.value().getResult());
+            //Await calculator module response
+            ConsumerRecord<String, CalcResponse> consumerRecord = future.get(10, TimeUnit.SECONDS);
+            LOGGER.info("::::> Received response from Kafka topic: {} with result: {}", responsesTopicName, consumerRecord.value().getResult());
 
-        return consumerRecord.value();
+            return consumerRecord.value();
+        } finally {
+            MDC.remove("uid");
+        }
     }
 }
