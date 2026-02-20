@@ -121,7 +121,7 @@ Both modules use SLF4J with Logback. Logs include MDC fields for request tracing
 - **`uid`** — Unique identifier per calculation request, propagated across both modules via Kafka
 - **`correlationId`** — Unique identifier per HTTP request, set by the REST module
 
-Log files are written to the `logs/` directory inside each module and can be accessed via Docker logs:
+Log files are written to the `logs/` directory inside each module and/or can be accessed via Docker logs:
 
 ```bash
 docker exec rest cat /app/logs/app.log
